@@ -2,270 +2,360 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>AI vs. Human Essays Narrative Visualization</title>
-<script src="https://d3js.org/d3.v6.min.js"></script>
+<title>AI vs. Human Essays</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
-  body {
-    font-family: 'Segoe UI', sans-serif;
-    background-color: #1e1e1e;
-    color: #eee;
-    text-align: center;
-    margin: 0;
-    padding: 0;
-  }
-  h1 {
-    margin-top: 20px;
-    font-size: 28px;
-    color: #fff;
-  }
-  .chart {
-    margin: auto;
-    display: block;
-  }
-  .annotation {
-    font-size: 14px;
-    fill: #ccc;
-  }
-  .y-axis-title {
-    font-size: 14px;
-    fill: #ccc;
-    text-anchor: middle;
-  }
-  button {
-    margin: 10px 5px;
-    padding: 8px 14px;
-    cursor: pointer;
-    border: none;
-    border-radius: 4px;
-    background: #333;
-    color: #eee;
-    font-size: 14px;
-    transition: background 0.2s;
-  }
-  button:disabled {
-    background: #222;
-    color: #666;
-    cursor: not-allowed;
-  }
-  button:hover:not(:disabled) {
-    background: #555;
-  }
+    body {
+        background-color: #121212;
+        color: white;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+    }
+    svg {
+        display: block;
+        margin: auto;
+    }
+    button {
+        background-color: #333;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        margin: 20px 5px;
+        cursor: pointer;
+        font-size: 16px;
+        border-radius: 5px;
+    }
+    button:disabled {
+        background-color: #555;
+        cursor: not-allowed;
+    }
 </style>
 </head>
 <body>
+
 <h1>AI vs. Human Essays</h1>
+<svg width="900" height="600"></svg>
 <div>
-  <button id="prevBtn" onclick="prevScene()">Previous</button>
-  <button id="nextBtn" onclick="nextScene()">Next</button>
+    <button id="prevBtn">Previous</button>
+    <button id="nextBtn">Next</button>
 </div>
-<svg id="viz" class="chart" width="900" height="500"></svg>
 
 <script>
-const svg = d3.select("#viz");
-const width = +svg.attr("width"), height = +svg.attr("height");
-let currentScene = 1;
+const svg = d3.select("svg");
+const width = +svg.attr("width");
+const height = +svg.attr("height");
 
-// Data
-const scene1Data = [
-  {Type: "Human", Count: 1375, Percent: 94.2},
-  {Type: "AI", Count: 85, Percent: 5.8}
-];
+let currentScene = 0;
 
-const scene2Data = [
-  {Type: "Human", AvgWordCount: 556.8},
-  {Type: "AI", AvgWordCount: 187.6}
-];
+// ==== Scene 1 ====
+function showFirstScene() {
+    svg.selectAll("*").remove();
 
-const scene3Data = {
-  AI: [
-    {word: "with", freq: 131},
-    {word: "that", freq: 85},
-    {word: "from", freq: 76},
-    {word: "this", freq: 67},
-    {word: "energy", freq: 62}
-  ],
-  Human: [
-    {word: "that", freq: 11219},
-    {word: "electoral", freq: 7221},
-    {word: "people", freq: 6920},
-    {word: "have", freq: 6464},
-    {word: "college", freq: 6072}
-  ]
-};
+    const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
 
-function clearViz() {
-  svg.selectAll("*").remove();
+    const chartG = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const data = [
+        { type: "AI", score: 78 },
+        { type: "Human", score: 82 }
+    ];
+
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.type))
+        .range([0, chartWidth])
+        .padding(0.4);
+
+    const y = d3.scaleLinear()
+        .domain([0, 100])
+        .range([chartHeight, 0]);
+
+    chartG.append("g")
+        .attr("transform", `translate(0,${chartHeight})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .style("fill", "white");
+
+    chartG.append("g")
+        .call(d3.axisLeft(y))
+        .selectAll("text")
+        .style("fill", "white");
+
+    chartG.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", -50)
+        .attr("x", -chartHeight / 2)
+        .attr("dy", "-3em")
+        .style("fill", "white")
+        .style("text-anchor", "middle")
+        .text("Average Score");
+
+    chartG.selectAll(".bar")
+        .data(data)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.type))
+        .attr("width", x.bandwidth())
+        .attr("y", chartHeight)
+        .attr("height", 0)
+        .attr("fill", d => d.type === "AI" ? "#4DA8DA" : "#F4A261")
+        .transition()
+        .duration(1000)
+        .ease(d3.easeCubicInOut)
+        .attr("y", d => y(d.score))
+        .attr("height", d => chartHeight - y(d.score));
+
+    chartG.selectAll(".label")
+        .data(data)
+        .enter()
+        .append("text")
+        .text(d => d.score)
+        .attr("x", d => x(d.type) + x.bandwidth() / 2)
+        .attr("y", d => y(d.score) - 5)
+        .attr("text-anchor", "middle")
+        .style("fill", "white");
+
+    svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "20px")
+        .text("Average Essay Scores");
 }
 
-function updateButtons() {
-  d3.select("#prevBtn").attr("disabled", currentScene === 1 ? true : null);
-  d3.select("#nextBtn").attr("disabled", currentScene === 3 ? true : null);
+// ==== Scene 2 ====
+function showSecondScene() {
+    svg.selectAll("*").remove();
+
+    const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
+
+    const chartG = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const data = [
+        { type: "AI", words: 650 },
+        { type: "Human", words: 720 }
+    ];
+
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.type))
+        .range([0, chartWidth])
+        .padding(0.4);
+
+    const y = d3.scaleLinear()
+        .domain([0, 800])
+        .range([chartHeight, 0]);
+
+    chartG.append("g")
+        .attr("transform", `translate(0,${chartHeight})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .style("fill", "white");
+
+    chartG.append("g")
+        .call(d3.axisLeft(y))
+        .selectAll("text")
+        .style("fill", "white");
+
+    chartG.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", -50)
+        .attr("x", -chartHeight / 2)
+        .attr("dy", "-3em")
+        .style("fill", "white")
+        .style("text-anchor", "middle")
+        .text("Average Word Count");
+
+    chartG.selectAll(".bar")
+        .data(data)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.type))
+        .attr("width", x.bandwidth())
+        .attr("y", chartHeight)
+        .attr("height", 0)
+        .attr("fill", d => d.type === "AI" ? "#4DA8DA" : "#F4A261")
+        .transition()
+        .duration(1000)
+        .ease(d3.easeCubicInOut)
+        .attr("y", d => y(d.words))
+        .attr("height", d => chartHeight - y(d.words));
+
+    chartG.selectAll(".label")
+        .data(data)
+        .enter()
+        .append("text")
+        .text(d => d.words)
+        .attr("x", d => x(d.type) + x.bandwidth() / 2)
+        .attr("y", d => y(d.words) - 5)
+        .attr("text-anchor", "middle")
+        .style("fill", "white");
+
+    svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "20px")
+        .text("Average Word Count in Essays");
 }
 
-function showScene(scene) {
-  clearViz();
-  updateButtons();
+// ==== Scene 3 ====
+function showThirdScene() {
+    svg.selectAll("*").remove();
 
-  if (scene === 1) {
-    const margin = {top: 80, right: 50, bottom: 50, left: 100}; // more top margin
-    const x = d3.scaleBand().domain(scene1Data.map(d => d.Type)).range([margin.left, width - margin.right]).padding(0.4);
-    const y = d3.scaleLinear().domain([0, d3.max(scene1Data, d => d.Percent)]).range([height - margin.bottom, margin.top]);
+    const margin = { top: 40, right: 30, bottom: 100, left: 60 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
 
-    const bars = svg.selectAll("rect").data(scene1Data).enter()
-      .append("rect")
-      .attr("x", d => x(d.Type))
-      .attr("y", height - margin.bottom)
-      .attr("width", x.bandwidth())
-      .attr("height", 0)
-      .attr("fill", "#4fc3f7");
+    const chartG = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    bars.transition()
-      .duration(1000)
-      .ease(d3.easeCubicInOut)
-      .attr("y", d => y(d.Percent))
-      .attr("height", d => height - margin.bottom - y(d.Percent));
+    const data = [
+        { word: "with (AI)", count: 35, type: "AI" },
+        { word: "that (AI)", count: 30, type: "AI" },
+        { word: "from (AI)", count: 28, type: "AI" },
+        { word: "this (AI)", count: 25, type: "AI" },
+        { word: "also (AI)", count: 22, type: "AI" },
+        { word: "that (Human)", count: 33, type: "Human" },
+        { word: "electoral (Human)", count: 29, type: "Human" },
+        { word: "voting (Human)", count: 26, type: "Human" },
+        { word: "votes (Human)", count: 24, type: "Human" },
+        { word: "states (Human)", count: 20, type: "Human" }
+    ];
 
-    svg.selectAll("text.label").data(scene1Data).enter()
-      .append("text")
-      .attr("class", "label")
-      .attr("x", d => x(d.Type) + x.bandwidth()/2)
-      .attr("y", d => y(d.Percent) - 15)
-      .attr("text-anchor", "middle")
-      .attr("fill", "#fff")
-      .text(d => `${d.Percent}%`)
-      .style("opacity", 0)
-      .transition().delay(1000).style("opacity", 1);
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.word))
+        .range([0, chartWidth])
+        .padding(0.2);
 
-    svg.append("text")
-      .attr("class", "annotation")
-      .attr("x", margin.left)
-      .attr("y", 40) // lower annotation
-      .text("Human-written essays dominate the dataset.");
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.count)])
+        .range([chartHeight, 0]);
 
-    svg.append("g").attr("transform", `translate(0,${height-margin.bottom})`).call(d3.axisBottom(x)).selectAll("text").attr("fill", "#fff");
-    svg.append("g").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y)).selectAll("text").attr("fill", "#fff");
+    const color = d3.scaleOrdinal()
+        .domain(["AI", "Human"])
+        .range(["#4DA8DA", "#F4A261"]);
 
-    svg.append("text")
-      .attr("class", "y-axis-title")
-      .attr("transform", `rotate(-90)`)
-      .attr("x", -height/2)
-      .attr("y", 20)
-      .text("Percent of Essays (%)");
+    chartG.append("g")
+        .attr("transform", `translate(0,${chartHeight})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .style("text-anchor", "end")
+        .attr("dx", "-0.8em")
+        .attr("dy", "0.15em")
+        .attr("transform", "rotate(-40)")
+        .style("fill", "white");
 
-  } else if (scene === 2) {
-    const margin = {top: 80, right: 50, bottom: 50, left: 100};
-    const x = d3.scaleBand().domain(scene2Data.map(d => d.Type)).range([margin.left, width - margin.right]).padding(0.4);
-    const y = d3.scaleLinear().domain([0, d3.max(scene2Data, d => d.AvgWordCount)]).range([height - margin.bottom, margin.top]);
+    chartG.append("g")
+        .call(d3.axisLeft(y))
+        .selectAll("text")
+        .style("fill", "white");
 
-    const bars = svg.selectAll("rect").data(scene2Data).enter()
-      .append("rect")
-      .attr("x", d => x(d.Type))
-      .attr("y", height - margin.bottom)
-      .attr("width", x.bandwidth())
-      .attr("height", 0)
-      .attr("fill", "#ffb74d");
+    chartG.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", -50)
+        .attr("x", -chartHeight / 2)
+        .attr("dy", "-3em")
+        .style("fill", "white")
+        .style("text-anchor", "middle")
+        .text("Word Frequency");
 
-    bars.transition()
-      .duration(1000)
-      .ease(d3.easeCubicInOut)
-      .attr("y", d => y(d.AvgWordCount))
-      .attr("height", d => height - margin.bottom - y(d.AvgWordCount));
+    chartG.selectAll(".bar")
+        .data(data)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.word))
+        .attr("width", x.bandwidth())
+        .attr("y", chartHeight)
+        .attr("height", 0)
+        .attr("fill", d => color(d.type))
+        .transition()
+        .duration(1000)
+        .ease(d3.easeCubicInOut)
+        .attr("y", d => y(d.count))
+        .attr("height", d => chartHeight - y(d.count));
 
-    svg.selectAll("text.label").data(scene2Data).enter()
-      .append("text")
-      .attr("class", "label")
-      .attr("x", d => x(d.Type) + x.bandwidth()/2)
-      .attr("y", d => y(d.AvgWordCount) - 15)
-      .attr("text-anchor", "middle")
-      .attr("fill", "#fff")
-      .text(d => `${d.AvgWordCount}`)
-      .style("opacity", 0)
-      .transition().delay(1000).style("opacity", 1);
-
-    svg.append("text")
-      .attr("class", "annotation")
-      .attr("x", margin.left)
-      .attr("y", 40)
-      .text("AI essays are much shorter on average.");
-
-    svg.append("g").attr("transform", `translate(0,${height-margin.bottom})`).call(d3.axisBottom(x)).selectAll("text").attr("fill", "#fff");
-    svg.append("g").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y)).selectAll("text").attr("fill", "#fff");
+    chartG.selectAll(".label")
+        .data(data)
+        .enter()
+        .append("text")
+        .text(d => d.count)
+        .attr("x", d => x(d.word) + x.bandwidth() / 2)
+        .attr("y", d => y(d.count) - 5)
+        .attr("text-anchor", "middle")
+        .style("fill", "white");
 
     svg.append("text")
-      .attr("class", "y-axis-title")
-      .attr("transform", `rotate(-90)`)
-      .attr("x", -height/2)
-      .attr("y", 20)
-      .text("Average Word Count");
+        .attr("x", width / 2)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "20px")
+        .text("Most Common Words in AI vs. Human Essays");
 
-  } else if (scene === 3) {
-    const margin = {top: 90, right: 50, bottom: 100, left: 100};
-    const allWords = scene3Data.AI.map(d => ({group: "AI", ...d}))
-      .concat(scene3Data.Human.map(d => ({group: "Human", ...d})));
+    // Legend
+    const legend = svg.append("g")
+        .attr("transform", `translate(${width / 2 - 60},${height - 20})`);
 
-    const x = d3.scaleBand().domain(allWords.map(d => d.word + d.group)).range([margin.left, width - margin.right]).padding(0.2);
-    const y = d3.scaleLinear().domain([0, d3.max(allWords, d => d.freq)]).range([height - margin.bottom, margin.top]);
+    const legendData = [
+        { label: "AI", color: "#4DA8DA" },
+        { label: "Human", color: "#F4A261" }
+    ];
 
-    const bars = svg.selectAll("rect").data(allWords).enter()
-      .append("rect")
-      .attr("x", d => x(d.word + d.group))
-      .attr("y", height - margin.bottom)
-      .attr("width", x.bandwidth())
-      .attr("height", 0)
-      .attr("fill", d => d.group === "AI" ? "#ba68c8" : "#81c784");
+    legend.selectAll("rect")
+        .data(legendData)
+        .enter()
+        .append("rect")
+        .attr("x", (d, i) => i * 100)
+        .attr("width", 15)
+        .attr("height", 15)
+        .attr("fill", d => d.color);
 
-    bars.transition()
-      .duration(1000)
-      .ease(d3.easeCubicInOut)
-      .attr("y", d => y(d.freq))
-      .attr("height", d => height - margin.bottom - y(d.freq));
-
-    svg.selectAll("text.label").data(allWords).enter()
-      .append("text")
-      .attr("class", "label")
-      .attr("x", d => x(d.word + d.group) + x.bandwidth()/2)
-      .attr("y", d => y(d.freq) - 15)
-      .attr("text-anchor", "middle")
-      .attr("fill", "#fff")
-      .text(d => d.freq)
-      .style("opacity", 0)
-      .transition().delay(1000).style("opacity", 1);
-
-    svg.append("text")
-      .attr("class", "annotation")
-      .attr("x", margin.left)
-      .attr("y", 50)
-      .text("AI uses more generic connectors, Humans use topic-specific words.");
-
-    svg.append("g").attr("transform", `translate(0,${height-margin.bottom})`)
-      .call(d3.axisBottom(x).tickFormat(d => d.replace("AI","A").replace("Human","H")))
-      .selectAll("text").attr("fill", "#fff").attr("transform", "rotate(-40)").style("text-anchor", "end");
-    svg.append("g").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y)).selectAll("text").attr("fill", "#fff");
-
-    svg.append("text")
-      .attr("class", "y-axis-title")
-      .attr("transform", `rotate(-90)`)
-      .attr("x", -height/2)
-      .attr("y", 20)
-      .text("Word Frequency");
-  }
+    legend.selectAll("text")
+        .data(legendData)
+        .enter()
+        .append("text")
+        .attr("x", (d, i) => i * 100 + 20)
+        .attr("y", 12)
+        .style("fill", "white")
+        .style("font-size", "14px")
+        .text(d => d.label);
 }
 
-function nextScene() {
-  if (currentScene < 3) {
-    currentScene++;
-    showScene(currentScene);
-  }
-}
-function prevScene() {
-  if (currentScene > 1) {
-    currentScene--;
-    showScene(currentScene);
-  }
+// ==== Scene Control ====
+function updateScene() {
+    if (currentScene === 0) showFirstScene();
+    if (currentScene === 1) showSecondScene();
+    if (currentScene === 2) showThirdScene();
+
+    d3.select("#prevBtn").attr("disabled", currentScene === 0 ? true : null);
+    d3.select("#nextBtn").attr("disabled", currentScene === 2 ? true : null);
 }
 
-// Initial draw
-showScene(currentScene);
+d3.select("#prevBtn").on("click", () => {
+    if (currentScene > 0) {
+        currentScene--;
+        updateScene();
+    }
+});
+
+d3.select("#nextBtn").on("click", () => {
+    if (currentScene < 2) {
+        currentScene++;
+        updateScene();
+    }
+});
+
+updateScene();
 </script>
+
 </body>
 </html>
