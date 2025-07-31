@@ -5,202 +5,159 @@
 <title>AI vs. Human Essays</title>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
-  body {
-    font-family: sans-serif;
-    background-color: #121212;
-    color: #eee;
-    margin: 0;
-    padding: 20px;
-  }
-
-  h1 {
-    text-align: center;
-    color: #fff;
-  }
-
-  p {
-    max-width: 800px;
-    margin: 0 auto 20px;
-    line-height: 1.5em;
-    color: #ccc;
-  }
-
-  #controls {
-    text-align: center;
-    margin-bottom: 20px;
-  }
-
-  button {
-    background-color: #1e1e1e;
-    border: 1px solid #444;
-    color: #ddd;
-    padding: 8px 14px;
-    margin: 0 5px;
-    cursor: pointer;
-    border-radius: 5px;
-    transition: background-color 0.2s;
-  }
-  button:hover {
-    background-color: #333;
-  }
-  button.active {
-    background-color: #444;
-  }
-
-  svg {
-    display: block;
-    margin: auto;
-    background-color: #181818;
-    border-radius: 5px;
-  }
-
-  .axis path, .axis line {
-    stroke: #999;
-  }
-  .axis text {
-    fill: #ccc;
-  }
+    body { font-family: Arial, sans-serif; background: #121212; color: #eee; margin: 0; padding: 20px; }
+    h1 { text-align: center; }
+    .controls { text-align: center; margin-bottom: 20px; }
+    button, input { margin: 5px; padding: 5px 10px; background: #333; color: white; border: none; border-radius: 4px; }
+    button:hover, input:hover { background: #444; }
+    .chart-container { display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; }
+    svg { background: #1e1e1e; border-radius: 6px; padding: 10px; }
+    .essay-list { margin-top: 30px; max-width: 800px; margin-left: auto; margin-right: auto; }
+    .essay { padding: 10px; border-bottom: 1px solid #444; }
+    .highlight { background: yellow; color: black; }
 </style>
 </head>
 <body>
 
-<h1>AI vs. Human Essays</h1>
-
-<p>
-This project explores a dataset of essays, each labeled as AI-generated or human-written.
-Using simple text analysis, we compare metrics like word count and average sentence length between the two groups.
-Toggle between metrics to see how writing style changes depending on the author.
-</p>
-
-<div id="controls">
-  <button class="active" data-metric="wordCount">Word Count</button>
-  <button data-metric="avgSentenceLength">Avg. Sentence Length</button>
+<div class="controls">
+    <button onclick="setFilter('all')">Show All</button>
+    <button onclick="setFilter('ai')">AI Only</button>
+    <button onclick="setFilter('human')">Human Only</button>
+    <input id="searchBox" type="text" placeholder="Search word..." oninput="updateDashboard()">
 </div>
 
-<svg id="chart" width="800" height="500"></svg>
+<div class="chart-container">
+    <div>
+        <h3>Average Word Count</h3>
+        <svg id="wordCountChart" width="400" height="300"></svg>
+    </div>
+    <div>
+        <h3>Average Sentence Length</h3>
+        <svg id="sentenceLengthChart" width="400" height="300"></svg>
+    </div>
+    <div>
+        <h3>Most Common Words</h3>
+        <svg id="wordFreqChart" width="400" height="300"></svg>
+    </div>
+</div>
+
+<div class="essay-list" id="essayList"></div>
 
 <script>
-const csvFile = "AI Generated Essays Dataset.csv"; // Make sure file is in same folder
+let essays = [];
+let currentFilter = "all";
 
-const svg = d3.select("#chart"),
-      margin = {top: 40, right: 30, bottom: 60, left: 80},
-      width = +svg.attr("width") - margin.left - margin.right,
-      height = +svg.attr("height") - margin.top - margin.bottom;
-
-const chartArea = svg.append("g")
-  .attr("transform", `translate(${margin.left},${margin.top})`);
-
-let dataProcessed, xScale, yScale, xAxisGroup, yAxisGroup, bars;
-
-// Load CSV and process
-d3.csv(csvFile).then(data => {
-  data.forEach(d => {
-    const words = d.text.trim().split(/\s+/);
-    const sentences = d.text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    d.wordCount = words.length;
-    d.avgSentenceLength = d.wordCount / sentences.length;
-    d.generated = +d.generated;
-  });
-
-  const grouped = d3.rollups(
-    data,
-    v => ({
-      wordCount: d3.mean(v, d => d.wordCount),
-      avgSentenceLength: d3.mean(v, d => d.avgSentenceLength)
-    }),
-    d => d.generated
-  );
-
-  // Convert group key to readable labels
-  dataProcessed = grouped.map(([key, values]) => ({
-    label: key === 1 ? "AI-generated" : "Human-written",
-    ...values
-  }));
-
-  drawChart("wordCount");
+d3.csv("AI Generated Essays Dataset.csv").then(data => {
+    essays = data.map(d => ({
+        text: d.text,
+        generated: d.generated === "1",
+        wordCount: d.text.split(/\s+/).filter(w => w).length,
+        avgSentenceLength: calcAvgSentenceLength(d.text)
+    }));
+    updateDashboard();
 });
 
-function drawChart(metric) {
-  // X scale - categories
-  xScale = d3.scaleBand()
-    .domain(dataProcessed.map(d => d.label))
-    .range([0, width])
-    .padding(0.3);
-
-  // Y scale - metric values
-  const maxVal = d3.max(dataProcessed, d => d[metric]);
-  yScale = d3.scaleLinear()
-    .domain([0, maxVal * 1.1])
-    .nice()
-    .range([height, 0]);
-
-  // Axes
-  if (!xAxisGroup) {
-    xAxisGroup = chartArea.append("g")
-      .attr("transform", `translate(0,${height})`)
-      .attr("class", "axis x-axis")
-      .call(d3.axisBottom(xScale));
-
-    yAxisGroup = chartArea.append("g")
-      .attr("class", "axis y-axis")
-      .call(d3.axisLeft(yScale));
-
-    // Y-axis label
-    chartArea.append("text")
-      .attr("transform", "rotate(-90)")
-      .attr("y", -50)
-      .attr("x", -height/2)
-      .attr("dy", "-1.5em")
-      .attr("text-anchor", "middle")
-      .style("fill", "#ccc")
-      .style("font-size", "14px")
-      .attr("id", "y-label");
-  } else {
-    xAxisGroup.transition().duration(800)
-      .call(d3.axisBottom(xScale));
-    yAxisGroup.transition().duration(800)
-      .call(d3.axisLeft(yScale));
-  }
-
-  // Bars
-  if (!bars) {
-    bars = chartArea.selectAll(".bar")
-      .data(dataProcessed)
-      .join("rect")
-      .attr("class", "bar")
-      .attr("x", d => xScale(d.label))
-      .attr("width", xScale.bandwidth())
-      .attr("y", height)
-      .attr("height", 0)
-      .attr("fill", "#4FC3F7")
-      .transition()
-      .duration(800)
-      .ease(d3.easeCubicInOut)
-      .attr("y", d => yScale(d[metric]))
-      .attr("height", d => height - yScale(d[metric]));
-  } else {
-    bars.data(dataProcessed)
-      .transition()
-      .duration(800)
-      .ease(d3.easeCubicInOut)
-      .attr("y", d => yScale(d[metric]))
-      .attr("height", d => height - yScale(d[metric]));
-  }
-
-  // Y-axis label text change
-  d3.select("#y-label").text(
-    metric === "wordCount" ? "Average Word Count" : "Average Sentence Length"
-  );
+function calcAvgSentenceLength(text) {
+    let sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    let words = text.split(/\s+/).filter(w => w);
+    return sentences.length ? (words.length / sentences.length) : 0;
 }
 
-// Button event listeners
-d3.selectAll("#controls button").on("click", function() {
-  const metric = d3.select(this).attr("data-metric");
-  d3.selectAll("#controls button").classed("active", false);
-  d3.select(this).classed("active", true);
-  drawChart(metric);
-});
-</script>
+function setFilter(type) {
+    currentFilter = type;
+    updateDashboard();
+}
 
+function updateDashboard() {
+    let searchTerm = document.getElementById("searchBox").value.toLowerCase();
+    let filtered = essays.filter(e => {
+        if (currentFilter === "ai") return e.generated;
+        if (currentFilter === "human") return !e.generated;
+        return true;
+    });
+    if (searchTerm) {
+        filtered = filtered.filter(e => e.text.toLowerCase().includes(searchTerm));
+    }
+    drawWordCountChart(filtered);
+    drawSentenceLengthChart(filtered);
+    drawWordFreqChart(filtered);
+    displayEssays(filtered, searchTerm);
+}
+
+function drawWordCountChart(data) {
+    let avgAI = d3.mean(data.filter(e => e.generated), d => d.wordCount) || 0;
+    let avgHuman = d3.mean(data.filter(e => !e.generated), d => d.wordCount) || 0;
+    let chartData = [
+        { label: "AI", value: avgAI },
+        { label: "Human", value: avgHuman }
+    ];
+    drawBarChart("#wordCountChart", chartData, "Words");
+}
+
+function drawSentenceLengthChart(data) {
+    let avgAI = d3.mean(data.filter(e => e.generated), d => d.avgSentenceLength) || 0;
+    let avgHuman = d3.mean(data.filter(e => !e.generated), d => d.avgSentenceLength) || 0;
+    let chartData = [
+        { label: "AI", value: avgAI },
+        { label: "Human", value: avgHuman }
+    ];
+    drawBarChart("#sentenceLengthChart", chartData, "Words per Sentence");
+}
+
+function drawWordFreqChart(data) {
+    let wordCounts = {};
+    data.forEach(e => {
+        e.text.toLowerCase().split(/\W+/).forEach(w => {
+            if (w.length > 3) wordCounts[w] = (wordCounts[w] || 0) + 1;
+        });
+    });
+    let topWords = Object.entries(wordCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([word, count]) => ({ label: word, value: count }));
+    drawBarChart("#wordFreqChart", topWords, "Frequency");
+}
+
+function drawBarChart(selector, data, yLabel) {
+    let svg = d3.select(selector);
+    svg.selectAll("*").remove();
+    let width = +svg.attr("width") - 50;
+    let height = +svg.attr("height") - 50;
+    let x = d3.scaleBand().domain(data.map(d => d.label)).range([0, width]).padding(0.3);
+    let y = d3.scaleLinear().domain([0, d3.max(data, d => d.value) || 1]).nice().range([height, 0]);
+    let g = svg.append("g").attr("transform", "translate(40,10)");
+    g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x)).selectAll("text").style("fill", "#eee");
+    g.append("g").call(d3.axisLeft(y)).selectAll("text").style("fill", "#eee");
+    g.selectAll(".bar").data(data).enter().append("rect")
+        .attr("class", "bar")
+        .attr("x", d => x(d.label))
+        .attr("y", height)
+        .attr("width", x.bandwidth())
+        .attr("height", 0)
+        .attr("fill", "#4db6ac")
+        .transition().duration(800).ease(d3.easeCubicInOut)
+        .attr("y", d => y(d.value))
+        .attr("height", d => height - y(d.value));
+    g.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 40)
+        .attr("fill", "#eee")
+        .attr("text-anchor", "middle")
+        .text(yLabel);
+}
+
+function displayEssays(data, searchTerm) {
+    let container = document.getElementById("essayList");
+    container.innerHTML = "";
+    data.forEach(e => {
+        let highlighted = e.text;
+        if (searchTerm) {
+            let regex = new RegExp(`(${searchTerm})`, "gi");
+            highlighted = highlighted.replace(regex, '<span class="highlight">$1</span>');
+        }
+        container.innerHTML += `<div class="essay"><strong>${e.generated ? "AI" : "Human"}</strong><br>${highlighted}</div>`;
+    });
+}
+</script>
 </body>
 </html>
