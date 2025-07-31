@@ -2,162 +2,231 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>AI vs. Human Essays</title>
+<title>AI vs. Human Essays Dashboard</title>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
-    body { font-family: Arial, sans-serif; background: #121212; color: #eee; margin: 0; padding: 20px; }
-    h1 { text-align: center; }
-    .controls { text-align: center; margin-bottom: 20px; }
-    button, input { margin: 5px; padding: 5px 10px; background: #333; color: white; border: none; border-radius: 4px; }
-    button:hover, input:hover { background: #444; }
-    .chart-container { display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; }
-    svg { background: #1e1e1e; border-radius: 6px; padding: 10px; }
-    .essay-list { margin-top: 30px; max-width: 800px; margin-left: auto; margin-right: auto; }
-    .essay { padding: 10px; border-bottom: 1px solid #444; }
-    .highlight { background: yellow; color: black; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #121212;
+    color: #fff;
+    margin: 0;
+    padding: 0;
+  }
+  header {
+    text-align: center;
+    padding: 20px;
+  }
+  h1 { margin-bottom: 5px; }
+  .filter-buttons {
+    text-align: center;
+    margin: 10px 0;
+  }
+  .filter-buttons button {
+    background: #333;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    margin: 0 5px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .filter-buttons button.active {
+    background: #ff9800;
+  }
+  .charts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    margin-top: 20px;
+  }
+  .chart {
+    background: #1e1e1e;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px;
+  }
+  svg {
+    background: #1e1e1e;
+  }
+  .preview-section {
+    max-width: 900px;
+    margin: 30px auto;
+    background: #1e1e1e;
+    padding: 20px;
+    border-radius: 8px;
+  }
+  .essay {
+    margin-bottom: 15px;
+  }
+  .essay p {
+    margin: 5px 0;
+  }
+  .toggle {
+    color: #ff9800;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
 </style>
 </head>
 <body>
 
-<div class="controls">
-    <button onclick="setFilter('all')">Show All</button>
-    <button onclick="setFilter('ai')">AI Only</button>
-    <button onclick="setFilter('human')">Human Only</button>
-    <input id="searchBox" type="text" placeholder="Search word..." oninput="updateDashboard()">
+<header>
+  <h1>AI vs. Human Essays</h1>
+  <p>Interactive dashboard comparing AI-generated and human-written essays.</p>
+</header>
+
+<div class="filter-buttons">
+  <button data-filter="all" class="active">All</button>
+  <button data-filter="ai">AI Only</button>
+  <button data-filter="human">Human Only</button>
 </div>
 
-<div class="chart-container">
-    <div>
-        <h3>Average Word Count</h3>
-        <svg id="wordCountChart" width="400" height="300"></svg>
-    </div>
-    <div>
-        <h3>Average Sentence Length</h3>
-        <svg id="sentenceLengthChart" width="400" height="300"></svg>
-    </div>
-    <div>
-        <h3>Most Common Words</h3>
-        <svg id="wordFreqChart" width="400" height="300"></svg>
-    </div>
+<div class="charts">
+  <div class="chart" id="wordCountChart">
+    <h3>Average Word Count</h3>
+    <svg width="400" height="300"></svg>
+  </div>
+  <div class="chart" id="sentenceLengthChart">
+    <h3>Average Sentence Length (words)</h3>
+    <svg width="400" height="300"></svg>
+  </div>
+  <div class="chart" id="commonWordsChart">
+    <h3>Most Common Words</h3>
+    <svg width="400" height="300"></svg>
+  </div>
 </div>
 
-<div class="essay-list" id="essayList"></div>
+<div class="preview-section">
+  <h3>Essay Previews</h3>
+  <div id="essayPreviews"></div>
+</div>
 
 <script>
-let essays = [];
-let currentFilter = "all";
-
 d3.csv("AI Generated Essays Dataset.csv").then(data => {
-    essays = data.map(d => ({
-        text: d.text,
-        generated: d.generated === "1",
-        wordCount: d.text.split(/\s+/).filter(w => w).length,
-        avgSentenceLength: calcAvgSentenceLength(d.text)
-    }));
-    updateDashboard();
-});
+  data.forEach(d => {
+    d.generated = +d.generated;
+    d.wordCount = d.text.split(/\s+/).length;
+    let sentences = d.text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    d.avgSentenceLength = sentences.length ? d.wordCount / sentences.length : 0;
+  });
 
-function calcAvgSentenceLength(text) {
-    let sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    let words = text.split(/\s+/).filter(w => w);
-    return sentences.length ? (words.length / sentences.length) : 0;
-}
+  const filterButtons = document.querySelectorAll(".filter-buttons button");
+  let currentFilter = "all";
 
-function setFilter(type) {
-    currentFilter = type;
-    updateDashboard();
-}
-
-function updateDashboard() {
-    let searchTerm = document.getElementById("searchBox").value.toLowerCase();
-    let filtered = essays.filter(e => {
-        if (currentFilter === "ai") return e.generated;
-        if (currentFilter === "human") return !e.generated;
-        return true;
+  filterButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      filterButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentFilter = btn.dataset.filter;
+      updateDashboard();
     });
-    if (searchTerm) {
-        filtered = filtered.filter(e => e.text.toLowerCase().includes(searchTerm));
-    }
-    drawWordCountChart(filtered);
-    drawSentenceLengthChart(filtered);
-    drawWordFreqChart(filtered);
-    displayEssays(filtered, searchTerm);
-}
+  });
 
-function drawWordCountChart(data) {
-    let avgAI = d3.mean(data.filter(e => e.generated), d => d.wordCount) || 0;
-    let avgHuman = d3.mean(data.filter(e => !e.generated), d => d.wordCount) || 0;
-    let chartData = [
-        { label: "AI", value: avgAI },
-        { label: "Human", value: avgHuman }
-    ];
-    drawBarChart("#wordCountChart", chartData, "Words");
-}
+  function getFilteredData() {
+    if (currentFilter === "ai") return data.filter(d => d.generated === 1);
+    if (currentFilter === "human") return data.filter(d => d.generated === 0);
+    return data;
+  }
 
-function drawSentenceLengthChart(data) {
-    let avgAI = d3.mean(data.filter(e => e.generated), d => d.avgSentenceLength) || 0;
-    let avgHuman = d3.mean(data.filter(e => !e.generated), d => d.avgSentenceLength) || 0;
-    let chartData = [
-        { label: "AI", value: avgAI },
-        { label: "Human", value: avgHuman }
-    ];
-    drawBarChart("#sentenceLengthChart", chartData, "Words per Sentence");
-}
+  function updateDashboard() {
+    const filtered = getFilteredData();
 
-function drawWordFreqChart(data) {
-    let wordCounts = {};
-    data.forEach(e => {
-        e.text.toLowerCase().split(/\W+/).forEach(w => {
-            if (w.length > 3) wordCounts[w] = (wordCounts[w] || 0) + 1;
-        });
-    });
-    let topWords = Object.entries(wordCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([word, count]) => ({ label: word, value: count }));
-    drawBarChart("#wordFreqChart", topWords, "Frequency");
-}
+    drawBarChart("#wordCountChart svg", [
+      {label: "AI", value: d3.mean(filtered.filter(d => d.generated === 1), d => d.wordCount) || 0},
+      {label: "Human", value: d3.mean(filtered.filter(d => d.generated === 0), d => d.wordCount) || 0}
+    ]);
 
-function drawBarChart(selector, data, yLabel) {
-    let svg = d3.select(selector);
+    drawBarChart("#sentenceLengthChart svg", [
+      {label: "AI", value: d3.mean(filtered.filter(d => d.generated === 1), d => d.avgSentenceLength) || 0},
+      {label: "Human", value: d3.mean(filtered.filter(d => d.generated === 0), d => d.avgSentenceLength) || 0}
+    ]);
+
+    drawCommonWords(filtered);
+
+    drawPreviews(filtered);
+  }
+
+  function drawBarChart(svgSelector, dataArray) {
+    const svg = d3.select(svgSelector);
     svg.selectAll("*").remove();
-    let width = +svg.attr("width") - 50;
-    let height = +svg.attr("height") - 50;
-    let x = d3.scaleBand().domain(data.map(d => d.label)).range([0, width]).padding(0.3);
-    let y = d3.scaleLinear().domain([0, d3.max(data, d => d.value) || 1]).nice().range([height, 0]);
-    let g = svg.append("g").attr("transform", "translate(40,10)");
-    g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x)).selectAll("text").style("fill", "#eee");
-    g.append("g").call(d3.axisLeft(y)).selectAll("text").style("fill", "#eee");
-    g.selectAll(".bar").data(data).enter().append("rect")
-        .attr("class", "bar")
-        .attr("x", d => x(d.label))
-        .attr("y", height)
-        .attr("width", x.bandwidth())
-        .attr("height", 0)
-        .attr("fill", "#4db6ac")
-        .transition().duration(800).ease(d3.easeCubicInOut)
-        .attr("y", d => y(d.value))
-        .attr("height", d => height - y(d.value));
-    g.append("text")
-        .attr("x", width / 2)
-        .attr("y", height + 40)
-        .attr("fill", "#eee")
-        .attr("text-anchor", "middle")
-        .text(yLabel);
-}
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = {top: 20, right: 20, bottom: 30, left: 50};
 
-function displayEssays(data, searchTerm) {
-    let container = document.getElementById("essayList");
-    container.innerHTML = "";
-    data.forEach(e => {
-        let highlighted = e.text;
-        if (searchTerm) {
-            let regex = new RegExp(`(${searchTerm})`, "gi");
-            highlighted = highlighted.replace(regex, '<span class="highlight">$1</span>');
-        }
-        container.innerHTML += `<div class="essay"><strong>${e.generated ? "AI" : "Human"}</strong><br>${highlighted}</div>`;
-    });
-}
+    const x = d3.scaleBand().domain(dataArray.map(d => d.label))
+      .range([margin.left, width - margin.right]).padding(0.3);
+
+    const y = d3.scaleLinear().domain([0, d3.max(dataArray, d => d.value)]).nice()
+      .range([height - margin.bottom, margin.top]);
+
+    svg.append("g")
+      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x));
+
+    svg.append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y));
+
+    svg.selectAll(".bar")
+      .data(dataArray)
+      .join("rect")
+      .attr("class", "bar")
+      .attr("x", d => x(d.label))
+      .attr("y", d => y(d.value))
+      .attr("height", d => y(0) - y(d.value))
+      .attr("width", x.bandwidth())
+      .attr("fill", "#ff9800");
+  }
+
+  function drawCommonWords(filtered) {
+    const aiText = filtered.filter(d => d.generated === 1).map(d => d.text).join(" ");
+    const humanText = filtered.filter(d => d.generated === 0).map(d => d.text).join(" ");
+    const allWords = (aiText + " " + humanText).toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+
+    const freq = {};
+    allWords.forEach(w => freq[w] = (freq[w] || 0) + 1);
+    const topWords = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,10)
+      .map(([word, count]) => ({label: word, value: count}));
+
+    drawBarChart("#commonWordsChart svg", topWords);
+  }
+
+  function drawPreviews(filtered) {
+    const container = d3.select("#essayPreviews");
+    container.selectAll("*").remove();
+
+    const ai = filtered.filter(d => d.generated === 1).slice(0, 10);
+    const human = filtered.filter(d => d.generated === 0).slice(0, 10);
+
+    container.append("h4").text("AI Essays");
+    ai.forEach(e => addEssayPreview(container, e));
+
+    container.append("h4").text("Human Essays");
+    human.forEach(e => addEssayPreview(container, e));
+  }
+
+  function addEssayPreview(container, entry) {
+    const div = container.append("div").attr("class", "essay");
+    const preview = entry.text.slice(0, 200) + (entry.text.length > 200 ? "..." : "");
+    const p = div.append("p").text(preview);
+    if (entry.text.length > 200) {
+      div.append("span")
+        .attr("class", "toggle")
+        .text("View full text")
+        .on("click", function() {
+          if (p.text() === preview) {
+            p.text(entry.text);
+            d3.select(this).text("Show less");
+          } else {
+            p.text(preview);
+            d3.select(this).text("View full text");
+          }
+        });
+    }
+  }
+
+  updateDashboard();
+});
 </script>
 </body>
 </html>
