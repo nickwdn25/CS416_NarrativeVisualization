@@ -5,221 +5,200 @@
 <title>AI vs. Human Essays</title>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #1e1e1e;
-        color: #f0f0f0;
-        margin: 0;
-        padding: 0;
-        text-align: center;
-    }
-    h1 {
-        margin-top: 20px;
-        color: #ffcc66;
-    }
-    p {
-        color: #ccc;
-        max-width: 700px;
-        margin: 0 auto 20px;
-        line-height: 1.4em;
-    }
-    .controls {
-        margin-bottom: 20px;
-    }
-    select, button, input {
-        background: #333;
-        color: #fff;
-        border: 1px solid #555;
-        padding: 6px 10px;
-        margin: 5px;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    button.active {
-        background: #ffcc66;
-        color: #000;
-        font-weight: bold;
-    }
-    svg {
-        background-color: #262626;
-        border-radius: 8px;
-    }
-    .tooltip {
-        position: absolute;
-        background: rgba(0, 0, 0, 0.85);
-        color: #fff;
-        padding: 6px 10px;
-        font-size: 0.85em;
-        border-radius: 4px;
-        pointer-events: none;
-        opacity: 0;
-    }
+  body {
+    font-family: sans-serif;
+    background-color: #121212;
+    color: #eee;
+    margin: 0;
+    padding: 20px;
+  }
+
+  h1 {
+    text-align: center;
+    color: #fff;
+  }
+
+  p {
+    max-width: 800px;
+    margin: 0 auto 20px;
+    line-height: 1.5em;
+    color: #ccc;
+  }
+
+  #controls {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  button {
+    background-color: #1e1e1e;
+    border: 1px solid #444;
+    color: #ddd;
+    padding: 8px 14px;
+    margin: 0 5px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.2s;
+  }
+  button:hover {
+    background-color: #333;
+  }
+  button.active {
+    background-color: #444;
+  }
+
+  svg {
+    display: block;
+    margin: auto;
+    background-color: #181818;
+    border-radius: 5px;
+  }
+
+  .axis path, .axis line {
+    stroke: #999;
+  }
+  .axis text {
+    fill: #ccc;
+  }
 </style>
 </head>
 <body>
 
 <h1>AI vs. Human Essays</h1>
-<p>Explore differences between AI-generated and human-written essays. Switch metrics, filter by type, and see which words dominate each style.</p>
 
-<div class="controls">
-    <label>Metric:</label>
-    <select id="metric">
-        <option value="score">Average Score</option>
-        <option value="wordcount">Average Word Count</option>
-        <option value="topwords">Top Words</option>
-    </select>
-    <label>Filter:</label>
-    <button class="filter-btn active" data-filter="both">Both</button>
-    <button class="filter-btn" data-filter="ai">AI Only</button>
-    <button class="filter-btn" data-filter="human">Human Only</button>
-    <input type="text" id="search" placeholder="Search word..." style="display:none;">
+<p>
+This project explores a dataset of essays, each labeled as AI-generated or human-written.
+Using simple text analysis, we compare metrics like word count and average sentence length between the two groups.
+Toggle between metrics to see how writing style changes depending on the author.
+</p>
+
+<div id="controls">
+  <button class="active" data-metric="wordCount">Word Count</button>
+  <button data-metric="avgSentenceLength">Avg. Sentence Length</button>
 </div>
 
-<div id="chart"></div>
-<div class="tooltip" id="tooltip"></div>
+<svg id="chart" width="800" height="500"></svg>
 
 <script>
-// ====== CONFIG ======
-const margin = { top: 40, right: 30, bottom: 50, left: 70 };
-const width = 800 - margin.left - margin.right;
-const height = 500 - margin.top - margin.bottom;
+const csvFile = "AI Generated Essays Dataset.csv"; // Make sure file is in same folder
 
-// Tooltip
-const tooltip = d3.select("#tooltip");
+const svg = d3.select("#chart"),
+      margin = {top: 40, right: 30, bottom: 60, left: 80},
+      width = +svg.attr("width") - margin.left - margin.right,
+      height = +svg.attr("height") - margin.top - margin.bottom;
 
-// SVG
-const svg = d3.select("#chart")
-    .append("svg")
-    .attr("width", width + margin.left + margin.right)
-    .attr("height", height + margin.top + margin.bottom)
-    .append("g")
-    .attr("transform", `translate(${margin.left},${margin.top})`);
+const chartArea = svg.append("g")
+  .attr("transform", `translate(${margin.left},${margin.top})`);
 
-// ====== LOAD DATA ======
-d3.csv("AI Generated Essays Dataset.csv").then(rawData => {
-    // Normalize
-    rawData.forEach(d => {
-        if (d.Type) d.Type = d.Type.trim();
-        if (d["Average_Score"]) d.Average_Score = +d["Average_Score"];
-        if (d["Average_Word_Count"]) d.Average_Word_Count = +d["Average_Word_Count"];
-        if (d.Frequency) d.Frequency = +d.Frequency;
-        if (d.Word) d.Word = d.Word.trim();
-    });
+let dataProcessed, xScale, yScale, xAxisGroup, yAxisGroup, bars;
 
-    // Current state
-    let metric = "score";
-    let filter = "both";
+// Load CSV and process
+d3.csv(csvFile).then(data => {
+  data.forEach(d => {
+    const words = d.text.trim().split(/\s+/);
+    const sentences = d.text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    d.wordCount = words.length;
+    d.avgSentenceLength = d.wordCount / sentences.length;
+    d.generated = +d.generated;
+  });
 
-    // Controls
-    d3.select("#metric").on("change", e => {
-        metric = e.target.value;
-        d3.select("#search").style("display", metric === "topwords" ? "inline-block" : "none");
-        updateChart();
-    });
-    d3.selectAll(".filter-btn").on("click", function() {
-        d3.selectAll(".filter-btn").classed("active", false);
-        d3.select(this).classed("active", true);
-        filter = d3.select(this).attr("data-filter");
-        updateChart();
-    });
-    d3.select("#search").on("input", updateChart);
+  const grouped = d3.rollups(
+    data,
+    v => ({
+      wordCount: d3.mean(v, d => d.wordCount),
+      avgSentenceLength: d3.mean(v, d => d.avgSentenceLength)
+    }),
+    d => d.generated
+  );
 
-    // Main update function
-    function updateChart() {
-        let data;
-        if (metric === "score") {
-            data = d3.rollups(rawData, v => d3.mean(v, d => d.Average_Score), d => d.Type)
-                .map(([Type, value]) => ({ key: Type, value }));
-        }
-        else if (metric === "wordcount") {
-            data = d3.rollups(rawData, v => d3.mean(v, d => d.Average_Word_Count), d => d.Type)
-                .map(([Type, value]) => ({ key: Type, value }));
-        }
-        else if (metric === "topwords") {
-            data = rawData.filter(d => d.Word && d.Frequency)
-                .filter(d => {
-                    if (filter === "ai") return d.Type === "AI";
-                    if (filter === "human") return d.Type === "Human";
-                    return true;
-                });
+  // Convert group key to readable labels
+  dataProcessed = grouped.map(([key, values]) => ({
+    label: key === 1 ? "AI-generated" : "Human-written",
+    ...values
+  }));
 
-            const searchTerm = d3.select("#search").property("value").toLowerCase();
-            if (searchTerm) {
-                data = data.filter(d => d.Word.toLowerCase().includes(searchTerm));
-            }
-            data = d3.rollups(data, v => d3.sum(v, d => d.Frequency), d => d.Word)
-                .map(([word, value]) => ({ key: word, value }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 10);
-        }
+  drawChart("wordCount");
+});
 
-        if (filter !== "both" && metric !== "topwords") {
-            data = data.filter(d => {
-                if (filter === "ai") return d.key === "AI";
-                if (filter === "human") return d.key === "Human";
-                return true;
-            });
-        }
+function drawChart(metric) {
+  // X scale - categories
+  xScale = d3.scaleBand()
+    .domain(dataProcessed.map(d => d.label))
+    .range([0, width])
+    .padding(0.3);
 
-        // Scales
-        const x = d3.scaleBand()
-            .domain(data.map(d => d.key))
-            .range([0, width])
-            .padding(0.3);
+  // Y scale - metric values
+  const maxVal = d3.max(dataProcessed, d => d[metric]);
+  yScale = d3.scaleLinear()
+    .domain([0, maxVal * 1.1])
+    .nice()
+    .range([height, 0]);
 
-        const y = d3.scaleLinear()
-            .domain([0, d3.max(data, d => d.value)]).nice()
-            .range([height, 0]);
+  // Axes
+  if (!xAxisGroup) {
+    xAxisGroup = chartArea.append("g")
+      .attr("transform", `translate(0,${height})`)
+      .attr("class", "axis x-axis")
+      .call(d3.axisBottom(xScale));
 
-        // Axes
-        svg.selectAll(".x-axis").remove();
-        svg.selectAll(".y-axis").remove();
-        svg.append("g")
-            .attr("class", "x-axis")
-            .attr("transform", `translate(0,${height})`)
-            .call(d3.axisBottom(x).tickSizeOuter(0));
-        svg.append("g")
-            .attr("class", "y-axis")
-            .call(d3.axisLeft(y));
+    yAxisGroup = chartArea.append("g")
+      .attr("class", "axis y-axis")
+      .call(d3.axisLeft(yScale));
 
-        // Bars
-        const bars = svg.selectAll(".bar")
-            .data(data, d => d.key);
+    // Y-axis label
+    chartArea.append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", -50)
+      .attr("x", -height/2)
+      .attr("dy", "-1.5em")
+      .attr("text-anchor", "middle")
+      .style("fill", "#ccc")
+      .style("font-size", "14px")
+      .attr("id", "y-label");
+  } else {
+    xAxisGroup.transition().duration(800)
+      .call(d3.axisBottom(xScale));
+    yAxisGroup.transition().duration(800)
+      .call(d3.axisLeft(yScale));
+  }
 
-        bars.join(
-            enter => enter.append("rect")
-                .attr("class", "bar")
-                .attr("x", d => x(d.key))
-                .attr("y", height)
-                .attr("width", x.bandwidth())
-                .attr("height", 0)
-                .attr("fill", "#66ccff")
-                .on("mousemove", (e, d) => {
-                    tooltip.style("opacity", 1)
-                        .html(`<strong>${d.key}</strong><br>${metricLabel(metric)}: ${d.value.toFixed(2)}`)
-                        .style("left", (e.pageX + 10) + "px")
-                        .style("top", (e.pageY - 28) + "px");
-                })
-                .on("mouseout", () => tooltip.style("opacity", 0))
-                .transition().duration(800).ease(d3.easeCubicInOut)
-                .attr("y", d => y(d.value))
-                .attr("height", d => height - y(d.value)),
-            update => update.transition().duration(800).ease(d3.easeCubicInOut)
-                .attr("x", d => x(d.key))
-                .attr("width", x.bandwidth())
-                .attr("y", d => y(d.value))
-                .attr("height", d => height - y(d.value)),
-            exit => exit.transition().duration(500).attr("y", height).attr("height", 0).remove()
-        );
-    }
+  // Bars
+  if (!bars) {
+    bars = chartArea.selectAll(".bar")
+      .data(dataProcessed)
+      .join("rect")
+      .attr("class", "bar")
+      .attr("x", d => xScale(d.label))
+      .attr("width", xScale.bandwidth())
+      .attr("y", height)
+      .attr("height", 0)
+      .attr("fill", "#4FC3F7")
+      .transition()
+      .duration(800)
+      .ease(d3.easeCubicInOut)
+      .attr("y", d => yScale(d[metric]))
+      .attr("height", d => height - yScale(d[metric]));
+  } else {
+    bars.data(dataProcessed)
+      .transition()
+      .duration(800)
+      .ease(d3.easeCubicInOut)
+      .attr("y", d => yScale(d[metric]))
+      .attr("height", d => height - yScale(d[metric]));
+  }
 
-    function metricLabel(metric) {
-        if (metric === "score") return "Average Score";
-        if (metric === "wordcount") return "Average Word Count";
-        return "Frequency";
-    }
+  // Y-axis label text change
+  d3.select("#y-label").text(
+    metric === "wordCount" ? "Average Word Count" : "Average Sentence Length"
+  );
+}
 
-    updateChart();
+// Button event listeners
+d3.selectAll("#controls button").on("click", function() {
+  const metric = d3.select(this).attr("data-metric");
+  d3.selectAll("#controls button").classed("active", false);
+  d3.select(this).classed("active", true);
+  drawChart(metric);
 });
 </script>
 
