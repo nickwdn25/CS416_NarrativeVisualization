@@ -1,231 +1,182 @@
 <!DOCTYPE html>
-<html lang="en">
+<meta charset="utf-8">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>AI vs. Human Essays Dashboard</title>
+<title>AI vs. Human Writing Styles</title>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
   body {
     font-family: Arial, sans-serif;
-    background: #121212;
-    color: #fff;
-    margin: 0;
-    padding: 0;
-  }
-  header {
-    text-align: center;
-    padding: 20px;
-  }
-  h1 { margin-bottom: 5px; }
-  .filter-buttons {
-    text-align: center;
-    margin: 10px 0;
-  }
-  .filter-buttons button {
-    background: #333;
+    background-color: #181818;
     color: white;
-    border: none;
-    padding: 8px 14px;
-    margin: 0 5px;
-    cursor: pointer;
-    border-radius: 4px;
+    margin: 20px;
   }
-  .filter-buttons button.active {
-    background: #ff9800;
+  h1 {
+    text-align: center;
+    font-size: 2em;
   }
-  .charts {
+  .dashboard {
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-around;
-    margin-top: 20px;
+    gap: 20px;
   }
-  .chart {
-    background: #1e1e1e;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px;
+  .chart-container {
+    flex: 1;
+    min-width: 500px;
+    background-color: #222;
+    padding: 20px;
+    border-radius: 10px;
   }
   svg {
-    background: #1e1e1e;
+    background-color: #222;
   }
-  .preview-section {
-    max-width: 900px;
-    margin: 30px auto;
-    background: #1e1e1e;
-    padding: 20px;
+  .previews-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  .previews-container {
+    display: flex;
+    gap: 20px;
+  }
+  .preview-box {
+    flex: 1;
+    background-color: #222;
+    padding: 10px;
     border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
   }
-  .essay {
-    margin-bottom: 15px;
+  .preview-box h3 {
+    margin-top: 0;
+    font-size: 1.2em;
+    text-align: center;
+    color: #FFD700;
   }
-  .essay p {
-    margin: 5px 0;
-  }
-  .toggle {
-    color: #ff9800;
-    cursor: pointer;
+  .preview-item {
+    margin-bottom: 12px;
     font-size: 0.9em;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
   }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>AI vs. Human Writing</h1>
-  <p>Explore the stylistic differences between AI-generated and human-written essays.</p>
-</header>
+<h1>AI vs. Human Writing Styles</h1>
 
-<div class="filter-buttons">
-  <button data-filter="all" class="active">All</button>
-  <button data-filter="ai">AI Only</button>
-  <button data-filter="human">Human Only</button>
-</div>
-
-<div class="charts">
-  <div class="chart" id="wordCountChart">
-    <h3>Average Word Count</h3>
-    <svg width="400" height="300"></svg>
-  </div>
-  <div class="chart" id="sentenceLengthChart">
-    <h3>Average Sentence Length (words)</h3>
-    <svg width="400" height="300"></svg>
-  </div>
-  <div class="chart" id="commonWordsChart">
-    <h3>Most Common Words</h3>
-    <svg width="400" height="300"></svg>
+<div class="dashboard">
+  <div class="chart-container">
+    <svg id="chart" width="600" height="400"></svg>
   </div>
 </div>
 
-<div class="preview-section">
-  <h3>Essay Previews</h3>
-  <div id="essayPreviews"></div>
+<div class="previews-title">Essay Previews</div>
+<div class="previews-container">
+  <div class="preview-box" id="ai-previews">
+    <h3>AI Essays</h3>
+  </div>
+  <div class="preview-box" id="human-previews">
+    <h3>Human Essays</h3>
+  </div>
 </div>
 
 <script>
-d3.csv("AI Generated Essays Dataset.csv").then(data => {
+// Load CSV
+d3.csv("essays.csv").then(data => {
   data.forEach(d => {
     d.generated = +d.generated;
     d.wordCount = d.text.split(/\s+/).length;
-    let sentences = d.text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    d.avgSentenceLength = sentences.length ? d.wordCount / sentences.length : 0;
   });
 
-  const filterButtons = document.querySelectorAll(".filter-buttons button");
-  let currentFilter = "all";
+  // Aggregate average word count by category
+  const grouped = d3.rollup(
+    data,
+    v => d3.mean(v, d => d.wordCount),
+    d => d.generated === 1 ? "AI" : "Human"
+  );
 
-  filterButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      filterButtons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      currentFilter = btn.dataset.filter;
-      updateDashboard();
-    });
-  });
+  const dataset = Array.from(grouped, ([key, value]) => ({ category: key, value }));
 
-  function getFilteredData() {
-    if (currentFilter === "ai") return data.filter(d => d.generated === 1);
-    if (currentFilter === "human") return data.filter(d => d.generated === 0);
-    return data;
-  }
+  const svg = d3.select("#chart"),
+        margin = {top: 20, right: 20, bottom: 40, left: 60},
+        width = +svg.attr("width") - margin.left - margin.right,
+        height = +svg.attr("height") - margin.top - margin.bottom;
 
-  function updateDashboard() {
-    const filtered = getFilteredData();
+  const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    drawBarChart("#wordCountChart svg", [
-      {label: "AI", value: d3.mean(filtered.filter(d => d.generated === 1), d => d.wordCount) || 0},
-      {label: "Human", value: d3.mean(filtered.filter(d => d.generated === 0), d => d.wordCount) || 0}
-    ]);
+  const x = d3.scaleBand()
+      .domain(dataset.map(d => d.category))
+      .range([0, width])
+      .padding(0.4);
 
-    drawBarChart("#sentenceLengthChart svg", [
-      {label: "AI", value: d3.mean(filtered.filter(d => d.generated === 1), d => d.avgSentenceLength) || 0},
-      {label: "Human", value: d3.mean(filtered.filter(d => d.generated === 0), d => d.avgSentenceLength) || 0}
-    ]);
+  const y = d3.scaleLinear()
+      .domain([0, d3.max(dataset, d => d.value)])
+      .nice()
+      .range([height, 0]);
 
-    drawCommonWords(filtered);
-
-    drawPreviews(filtered);
-  }
-
-  function drawBarChart(svgSelector, dataArray) {
-    const svg = d3.select(svgSelector);
-    svg.selectAll("*").remove();
-    const width = +svg.attr("width");
-    const height = +svg.attr("height");
-    const margin = {top: 20, right: 20, bottom: 30, left: 50};
-
-    const x = d3.scaleBand().domain(dataArray.map(d => d.label))
-      .range([margin.left, width - margin.right]).padding(0.3);
-
-    const y = d3.scaleLinear().domain([0, d3.max(dataArray, d => d.value)]).nice()
-      .range([height - margin.bottom, margin.top]);
-
-    svg.append("g")
-      .attr("transform", `translate(0,${height - margin.bottom})`)
+  const xAxis = g.append("g")
+      .attr("transform", `translate(0,${height})`)
       .call(d3.axisBottom(x));
 
-    svg.append("g")
-      .attr("transform", `translate(${margin.left},0)`)
+  const yAxis = g.append("g")
       .call(d3.axisLeft(y));
 
-    svg.selectAll(".bar")
-      .data(dataArray)
+  // Y axis label
+  svg.append("text")
+      .attr("transform", `rotate(-90)`)
+      .attr("y", 15)
+      .attr("x", -height/2 - margin.top)
+      .attr("dy", "-3em")
+      .attr("text-anchor", "middle")
+      .style("fill", "white")
+      .text("Average Word Count");
+
+  // Bars with transitions
+  const bars = g.selectAll(".bar")
+      .data(dataset)
       .join("rect")
       .attr("class", "bar")
-      .attr("x", d => x(d.label))
-      .attr("y", d => y(d.value))
-      .attr("height", d => y(0) - y(d.value))
+      .attr("x", d => x(d.category))
+      .attr("y", height)
       .attr("width", x.bandwidth())
-      .attr("fill", "#ff9800");
-  }
+      .attr("height", 0)
+      .attr("fill", "#4DB6AC")
+      .transition()
+      .duration(800)
+      .ease(d3.easeCubicInOut)
+      .attr("y", d => y(d.value))
+      .attr("height", d => height - y(d.value));
 
-  function drawCommonWords(filtered) {
-    const aiText = filtered.filter(d => d.generated === 1).map(d => d.text).join(" ");
-    const humanText = filtered.filter(d => d.generated === 0).map(d => d.text).join(" ");
-    const allWords = (aiText + " " + humanText).toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+  // Labels
+  g.selectAll(".label")
+      .data(dataset)
+      .join("text")
+      .attr("class", "label")
+      .attr("x", d => x(d.category) + x.bandwidth()/2)
+      .attr("y", d => y(d.value) - 5)
+      .attr("text-anchor", "middle")
+      .style("fill", "white")
+      .text(d => Math.round(d.value));
 
-    const freq = {};
-    allWords.forEach(w => freq[w] = (freq[w] || 0) + 1);
-    const topWords = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,10)
-      .map(([word, count]) => ({label: word, value: count}));
+  // Populate previews
+  const aiEssays = data.filter(d => d.generated === 1).slice(0, 10);
+  const humanEssays = data.filter(d => d.generated === 0).slice(0, 10);
 
-    drawBarChart("#commonWordsChart svg", topWords);
-  }
+  const aiContainer = d3.select("#ai-previews");
+  aiEssays.forEach(e => {
+    aiContainer.append("div")
+      .attr("class", "preview-item")
+      .text(e.text.substring(0, 150) + "...");
+  });
 
-  function drawPreviews(filtered) {
-    const container = d3.select("#essayPreviews");
-    container.selectAll("*").remove();
-
-    const ai = filtered.filter(d => d.generated === 1).slice(0, 10);
-    const human = filtered.filter(d => d.generated === 0).slice(0, 10);
-
-    container.append("h4").text("AI Essays");
-    ai.forEach(e => addEssayPreview(container, e));
-
-    container.append("h4").text("Human Essays");
-    human.forEach(e => addEssayPreview(container, e));
-  }
-
-  function addEssayPreview(container, entry) {
-    const div = container.append("div").attr("class", "essay");
-    const preview = entry.text.slice(0, 200) + (entry.text.length > 200 ? "..." : "");
-    const p = div.append("p").text(preview);
-    if (entry.text.length > 200) {
-      div.append("span")
-        .attr("class", "toggle")
-        .text("View full text")
-        .on("click", function() {
-          if (p.text() === preview) {
-            p.text(entry.text);
-            d3.select(this).text("Show less");
-          } else {
-            p.text(preview);
-            d3.select(this).text("View full text");
-          }
-        });
-    }
-  }
-
-  updateDashboard();
+  const humanContainer = d3.select("#human-previews");
+  humanEssays.forEach(e => {
+    humanContainer.append("div")
+      .attr("class", "preview-item")
+      .text(e.text.substring(0, 150) + "...");
+  });
 });
 </script>
 </body>
