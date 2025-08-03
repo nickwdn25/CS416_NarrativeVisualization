@@ -1,106 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>AI vs. Human Writing</title>
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #121212;
-    color: #fff;
-    margin: 0;
-    padding: 0;
-  }
-  header {
-    text-align: center;
-    padding: 20px;
-  }
-  h1 { margin-bottom: 5px; }
-  .filter-buttons {
-    text-align: center;
-    margin: 10px 0;
-  }
-  .filter-buttons button {
-    background: #333;
-    color: white;
-    border: none;
-    padding: 8px 14px;
-    margin: 0 5px;
-    cursor: pointer;
-    border-radius: 4px;
-  }
-  .filter-buttons button.active {
-    background: #ff9800;
-  }
-  .charts {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-around;
-    margin-top: 20px;
-  }
-  .chart {
-    background: #1e1e1e;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px;
-  }
-  svg {
-    background: #1e1e1e;
-  }
-  .preview-section {
-    max-width: 900px;
-    margin: 30px auto;
-    background: #1e1e1e;
-    padding: 20px;
-    border-radius: 8px;
-  }
-  .essay {
-    margin-bottom: 15px;
-  }
-  .essay p {
-    margin: 5px 0;
-  }
-  .toggle {
-    color: #ff9800;
-    cursor: pointer;
-    font-size: 0.9em;
-  }
-</style>
-</head>
-<body>
-
-<header>
-  <h1>AI vs. Human Writing</h1>
-  <p>Explore the stylistic differences between AI-generated and human-written essays.</p>
-</header>
-
-<div class="filter-buttons">
-  <button data-filter="all" class="active">All</button>
-  <button data-filter="ai">AI Only</button>
-  <button data-filter="human">Human Only</button>
-</div>
-
-<div class="charts">
-  <div class="chart" id="wordCountChart">
-    <h3>Average Word Count</h3>
-    <svg width="400" height="300"></svg>
-  </div>
-  <div class="chart" id="sentenceLengthChart">
-    <h3>Average Sentence Length (words)</h3>
-    <svg width="400" height="300"></svg>
-  </div>
-  <div class="chart" id="commonWordsChart">
-    <h3>Most Common Words</h3>
-    <svg width="400" height="300"></svg>
-  </div>
-</div>
-
-<div class="preview-section">
-  <h3>Essay Previews</h3>
-  <div id="essayPreviews"></div>
-</div>
-
 <script>
 d3.csv("AI Generated Essays Dataset.csv").then(data => {
   data.forEach(d => {
@@ -131,22 +28,24 @@ d3.csv("AI Generated Essays Dataset.csv").then(data => {
   function updateDashboard() {
     const filtered = getFilteredData();
 
-    drawBarChart("#wordCountChart svg", [
+    const wcData = [
       {label: "AI", value: d3.mean(filtered.filter(d => d.generated === 1), d => d.wordCount) || 0},
       {label: "Human", value: d3.mean(filtered.filter(d => d.generated === 0), d => d.wordCount) || 0}
-    ]);
+    ];
+    drawBarChart("#wordCountChart svg", wcData, "#wordCountChart");
 
-    drawBarChart("#sentenceLengthChart svg", [
+    const slData = [
       {label: "AI", value: d3.mean(filtered.filter(d => d.generated === 1), d => d.avgSentenceLength) || 0},
       {label: "Human", value: d3.mean(filtered.filter(d => d.generated === 0), d => d.avgSentenceLength) || 0}
-    ]);
+    ];
+    drawBarChart("#sentenceLengthChart svg", slData, "#sentenceLengthChart");
 
     drawCommonWords(filtered);
 
     drawPreviews(filtered);
   }
 
-  function drawBarChart(svgSelector, dataArray) {
+  function drawBarChart(svgSelector, dataArray, chartContainer) {
     const svg = d3.select(svgSelector);
     svg.selectAll("*").remove();
     const width = +svg.attr("width");
@@ -167,15 +66,33 @@ d3.csv("AI Generated Essays Dataset.csv").then(data => {
       .attr("transform", `translate(${margin.left},0)`)
       .call(d3.axisLeft(y));
 
+    // Transition bars
     svg.selectAll(".bar")
       .data(dataArray)
       .join("rect")
       .attr("class", "bar")
       .attr("x", d => x(d.label))
-      .attr("y", d => y(d.value))
-      .attr("height", d => y(0) - y(d.value))
       .attr("width", x.bandwidth())
-      .attr("fill", "#ff9800");
+      .attr("y", y(0))
+      .attr("height", 0)
+      .attr("fill", "#ff9800")
+      .transition()
+      .duration(800)
+      .attr("y", d => y(d.value))
+      .attr("height", d => y(0) - y(d.value));
+
+    // Add annotation
+    const topItem = dataArray.reduce((a, b) => a.value > b.value ? a : b);
+    const annotationText = `${topItem.label} highest: ${topItem.value.toFixed(1)}`;
+
+    d3.select(chartContainer).selectAll(".annotation").remove();
+    d3.select(chartContainer)
+      .append("div")
+      .attr("class", "annotation")
+      .style("color", "#ff9800")
+      .style("font-size", "0.9em")
+      .style("margin-top", "5px")
+      .text(annotationText);
   }
 
   function drawCommonWords(filtered) {
@@ -188,21 +105,18 @@ d3.csv("AI Generated Essays Dataset.csv").then(data => {
     const topWords = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,10)
       .map(([word, count]) => ({label: word, value: count}));
 
-    drawBarChart("#commonWordsChart svg", topWords);
+    drawBarChart("#commonWordsChart svg", topWords, "#commonWordsChart");
   }
 
   function drawPreviews(filtered) {
     const container = d3.select("#essayPreviews");
     container.selectAll("*").remove();
 
-    const ai = filtered.filter(d => d.generated === 1).slice(0, 10);
-    const human = filtered.filter(d => d.generated === 0).slice(0, 10);
+    container.append("h4").style("font-size", "1.4em").style("font-weight", "bold").text("AI Essays");
+    filtered.filter(d => d.generated === 1).slice(0, 10).forEach(e => addEssayPreview(container, e));
 
-    container.append("h4").text("AI Essays");
-    ai.forEach(e => addEssayPreview(container, e));
-
-    container.append("h4").text("Human Essays");
-    human.forEach(e => addEssayPreview(container, e));
+    container.append("h4").style("font-size", "1.4em").style("font-weight", "bold").text("Human Essays");
+    filtered.filter(d => d.generated === 0).slice(0, 10).forEach(e => addEssayPreview(container, e));
   }
 
   function addEssayPreview(container, entry) {
@@ -228,5 +142,3 @@ d3.csv("AI Generated Essays Dataset.csv").then(data => {
   updateDashboard();
 });
 </script>
-</body>
-</html>
