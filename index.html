@@ -81,6 +81,11 @@
   <button data-filter="human">Human Only</button>
 </div>
 
+<div class="search-container" style="text-align:center; margin: 15px 0;">
+  <input type="text" id="wordSearch" placeholder="Search for a word..." 
+         style="padding: 6px; border-radius: 4px; border: none; width: 220px;">
+</div>
+
 <div class="charts">
   <div class="chart" id="wordCountChart">
     <h3>Average Word Count</h3>
@@ -178,18 +183,46 @@ d3.csv("AI Generated Essays Dataset.csv").then(data => {
       .attr("fill", "#ff9800");
   }
 
+  let searchWord = "";
+
+document.getElementById("wordSearch").addEventListener("input", function() {
+  searchWord = this.value.trim().toLowerCase();
+  updateDashboard();
+});
+
+
   function drawCommonWords(filtered) {
-    const aiText = filtered.filter(d => d.generated === 1).map(d => d.text).join(" ");
-    const humanText = filtered.filter(d => d.generated === 0).map(d => d.text).join(" ");
-    const allWords = (aiText + " " + humanText).toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+  const aiText = filtered.filter(d => d.generated === 1).map(d => d.text).join(" ").toLowerCase();
+  const humanText = filtered.filter(d => d.generated === 0).map(d => d.text).join(" ").toLowerCase();
+  const allWords = (aiText + " " + humanText).match(/\b[a-z]{3,}\b/g) || [];
 
-    const freq = {};
-    allWords.forEach(w => freq[w] = (freq[w] || 0) + 1);
-    const topWords = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,10)
-      .map(([word, count]) => ({label: word, value: count}));
+  const freq = {};
+  allWords.forEach(w => freq[w] = (freq[w] || 0) + 1);
+  let topWords = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,10)
+    .map(([word, count]) => ({label: word, value: count}));
 
-    drawBarChart("#commonWordsChart svg", topWords);
+  if (searchWord && !topWords.some(d => d.label === searchWord)) {
+    const count = freq[searchWord] || 0;
+    topWords.push({label: searchWord, value: count});
+    topWords = topWords.sort((a,b) => b.value - a.value);
   }
+
+  drawBarChart("#commonWordsChart svg", topWords, "#commonWordsChart");
+
+  if (searchWord) {
+    const aiCount = (aiText.match(new RegExp(`\\b${searchWord}\\b`, "g")) || []).length;
+    const humanCount = (humanText.match(new RegExp(`\\b${searchWord}\\b`, "g")) || []).length;
+    d3.select("#commonWordsChart").selectAll(".annotation").remove();
+    d3.select("#commonWordsChart")
+      .append("div")
+      .attr("class", "annotation")
+      .style("color", "#ff9800")
+      .style("font-size", "0.9em")
+      .style("margin-top", "5px")
+      .html(`"${searchWord}" → AI: ${aiCount}, Human: ${humanCount}`);
+  }
+}
+
 
   function drawPreviews(filtered) {
     const container = d3.select("#essayPreviews");
@@ -227,6 +260,8 @@ d3.csv("AI Generated Essays Dataset.csv").then(data => {
 
   updateDashboard();
 });
+
+
 </script>
 
 <script>
